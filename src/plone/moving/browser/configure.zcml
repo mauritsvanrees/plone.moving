@@ -18,4 +18,12 @@
       directory="static"
       />
 
+  <!-- We could allow exporting Folderish as well, or items, but we start with the full site. -->
+  <browser:page
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      name="plone-export"
+      class=".exporting.FullExportView"
+      permission="cmf.ManagePortal"
+      />
+
 </configure>
