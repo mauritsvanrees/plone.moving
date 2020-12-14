@@ -26,4 +26,11 @@
       permission="cmf.ManagePortal"
       />
 
+  <browser:page
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      name="plone-import"
+      class=".importing.FullImportView"
+      permission="cmf.ManagePortal"
+      />
+
 </configure>

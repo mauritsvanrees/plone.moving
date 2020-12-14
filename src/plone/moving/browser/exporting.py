@@ -1,3 +1,4 @@
+from .. import config
 from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
 from plone.restapi.interfaces import ISerializeToJson
@@ -13,11 +14,6 @@ import shutil
 
 
 logger = logging.getLogger(__name__)
-# Use directory in buildout/var/instance.
-DIR = os.path.join(os.environ.get("CLIENT_HOME", ""), "exports")
-# collective.jsonify puts 1000 files in a directory, so we don't reach some filesystem limit.
-# That seems wise.
-ITEMS_PER_DIR = 1000
 
 
 class FullExportView(BrowserView):
@@ -28,7 +24,7 @@ class FullExportView(BrowserView):
         self.count = 0
         # For the moment, always create a fresh export.
         # Later we can think about updating.
-        shutil.rmtree(DIR)
+        shutil.rmtree(config.DIR)
         self.intids = queryUtility(IIntIds)
         # Note: if we would allow calling this on non-site root,
         # we should export the current item as well.
@@ -104,8 +100,8 @@ class FullExportView(BrowserView):
         return info
 
     def _make_dir(self):
-        # create DIR/0/0, DIR/0/999, DIR/1/1000, etc.
-        new_dir_name = os.path.join(DIR, str(self.count // 1000), str(self.count))
+        # create config.DIR/0/0, config.DIR/0/999, config.DIR/1/1000, etc.
+        new_dir_name = os.path.join(config.DIR, str(self.count // config.ITEMS_PER_DIR), str(self.count))
         if not os.path.isdir(new_dir_name):
             os.makedirs(new_dir_name, mode=0o700)
         return new_dir_name
