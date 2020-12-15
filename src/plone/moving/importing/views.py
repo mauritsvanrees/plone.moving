@@ -1,4 +1,6 @@
 from .. import config
+from Acquisition import aq_base
+from Acquisition.interfaces import IAcquirer
 from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
 from plone.restapi.interfaces import IDeserializeFromJson
@@ -6,17 +8,29 @@ from plone.restapi.services.locking.locking import is_locked
 from zope.cachedescriptors.property import Lazy
 from zope.component import getAdapters
 from zope.component import getMultiAdapter
-from zope.component import queryUtility
 from zope.interface import alsoProvides
-from zope.intid.interfaces import IIntIds
-from zope.intid.interfaces import IntIdMissingError
+from plone.restapi.services.content.utils import add
+from plone.restapi.services.content.utils import create
+from Products.CMFPlone.utils import safe_hasattr
+# from zExceptions import BadRequest
+# from zExceptions import Unauthorized
+from zope.component import queryMultiAdapter
+from zope.event import notify
+from zope.lifecycleevent import ObjectCreatedEvent
 
 import json
 import logging
 import os
 import plone.protect.interfaces
-import shutil
+import pkg_resources
 import six
+
+
+try:
+    pkg_resources.get_distribution("plone.app.multilingual")
+    PAM_INSTALLED = True
+except pkg_resources.DistributionNotFound:
+    PAM_INSTALLED = False
 
 
 logger = logging.getLogger(__name__)
@@ -87,18 +101,69 @@ class ContentImportView(BrowserView):
         # Get meta info.  We might also get some of this from default.json.
         # Maybe we need less in meta.
         meta = all_info["meta"]
+        # if "front-page" in meta.get("path", ""):
+        #     import pdb; pdb.set_trace()
         # See if the object already exists.
         obj = self.get_object(**meta)
         if obj is None:
-            # We need to get the parent.
+            # We need to get some parent, either from default["parent"] or meta.
+            path = meta["path"]
+            parent_path = path.rpartition("/")[0]
+            parent_obj = self.get_object(path=parent_path)
+            if parent_obj is None:
+                logger.warning("Parent object not found, cannot create content for %s", path)
+                return
             default = all_info["default"]
-            parent = default["parent"]
-            if not parent:
-                pass
-            parent_id = parent["@id"]
-            portal_type = meta.get("portal_type")
-            logger.info("Not adding content for now.")
-            return
+            # Code taken from plone.restapi add.py FolderPost.reply.
+            # It would be nice if we could call that method directly, but it does too much.
+            # We would need to split it a bit, especially:
+            # don't get json from the request body, and don't change the response.
+            type_ = default.get("@type", None)
+            id_ = default.get("id", None)
+            title = default.get("title", None)
+            translation_of = default.get("translation_of", None)
+            language = default.get("language", None)
+            # except Unauthorized / BadRequest
+            obj = create(parent_obj, type_, id_=id_, title=title)
+            # Acquisition wrap temporarily to satisfy things like vocabularies
+            # depending on tools
+            temporarily_wrapped = False
+            if IAcquirer.providedBy(obj) and not safe_hasattr(obj, "aq_base"):
+                obj = obj.__of__(self.context)
+                temporarily_wrapped = True
+            deserializer = queryMultiAdapter((obj, self.request), IDeserializeFromJson)
+            if deserializer is None:
+                logger.error("Cannot deserialize type %s", obj.portal_type)
+                return
+            # except DeserializationError as e:
+            deserializer(validate_all=True, data=default, create=True)
+            if temporarily_wrapped:
+                obj = aq_base(obj)
+            if not getattr(deserializer, "notifies_create", False):
+                notify(ObjectCreatedEvent(obj))
+            obj = add(parent_obj, obj, rename=not bool(id_))
+            obj_path = "/".join(obj.getPhysicalPath())
+            logger.info("Created %s at %s", type_, obj_path)
+
+            # Link translation given the translation_of property
+            if PAM_INSTALLED:
+                # Note: untested.
+                from plone.app.multilingual.interfaces import (
+                    IPloneAppMultilingualInstalled,
+                )  # noqa
+                from plone.app.multilingual.interfaces import ITranslationManager
+
+                if (
+                    IPloneAppMultilingualInstalled.providedBy(self.request)
+                    and translation_of
+                    and language
+                ):
+                    source = self.get_object(translation_of)
+                    if source:
+                        manager = ITranslationManager(source)
+                        manager.register_translation(language, obj)
+
+            # TODO: call other, named deserializers, but they do not work currently anyway.
         else:
             obj_path = "/".join(obj.getPhysicalPath())
             if is_locked(obj, self.request):
@@ -137,7 +202,7 @@ class ContentImportView(BrowserView):
             return self.portal
         uid = kwargs.get("uid")
         if uid:
-            brain = catalog(UID=uid)
+            brain = self.catalog(UID=uid)
             if brain:
                 return brain[0].getObject()
             # We can debate whether we should try by path when the uid is not found.
