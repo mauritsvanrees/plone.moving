@@ -87,11 +87,13 @@ class ContentImportView(BrowserView):
         __traceback_info__ = dirpath
         logger.info("Importing item at %s", dirpath)
         all_info = {}
+        blobs = {}
         for name in filenames:
             filepath = os.path.join(dirpath, name)
             key, ext = os.path.splitext(name)
             if ext != ".json":
-                logger.warning("Ignoring non json file at %s", filepath)
+                logger.info("Found non json file, will use as blob, at %s", filepath)
+                blobs[key] = filepath
                 continue
             logger.info("Reading %s", filepath)
             with open(filepath) as myfile:
@@ -135,6 +137,12 @@ class ContentImportView(BrowserView):
             if deserializer is None:
                 logger.error("Cannot deserialize type %s", obj.portal_type)
                 return
+            if blobs:
+                for fieldname, path in blobs.items():
+                    if fieldname in default:
+                        with open(path, "rb") as myfile:
+                            default[fieldname]["data"] = myfile.read()
+
             # except DeserializationError as e:
             deserializer(validate_all=True, data=default, create=True)
             if temporarily_wrapped:
@@ -186,6 +194,11 @@ class ContentImportView(BrowserView):
                     # TODO Fix this in plone.restapi.
                     logger.info("Ignoring local_roles deserializer for now, as it does not accept a content parameter.")
                     continue
+                if name == "default" and blobs:
+                    for fieldname, path in blobs.items():
+                        if fieldname in content:
+                            with open(path, "rb") as myfile:
+                                content[fieldname]["data"] = myfile.read()
                 try:
                     deserializer(data=content)
                 except TypeError:
