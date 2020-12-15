@@ -129,17 +129,33 @@ class ContentImportView(BrowserView):
         path = kwargs.get("path")
         if not path:
             return
-        # TODO: importing /Plone/front-page to /Plone2/front-page should work.
-        # Ouch: when I try this with two Plone Sites in the same database,
-        # it finds the item in the original Plone site...
         if path.startswith("/"):
+            # Resolve by path
             if six.PY2:
                 path = path.encode("utf8")
-            # Resolve by path
-            return self.portal.restrictedTraverse(path.lstrip("/"), None)
-        if path.startswith(self.portal.absolute_url()):
+            path = path.lstrip("/")
+        elif path.startswith(self.portal.absolute_url()):
             # Resolve by URL
             path = path[len(self.portal.absolute_url()) + 1 :]
             if six.PY2:
                 path = path.encode("utf8")
-            return self.portal.restrictedTraverse(path, None)
+        else:
+            logger.error("Ignoring unknown path %r", path)
+            return
+        obj = self.portal.restrictedTraverse(path, None)
+        if obj is None:
+            return
+        # Importing /Plone/front-page to /Plone2/front-page should work.
+        # But when I try this with two Plone Sites in the same database,
+        # it finds the item in the original Plone site, thanks to Acquisition...
+        # So check if this object is within the current Plone Site.
+        obj_path = obj.getPhysicalPath()
+        portal_path = self.portal.getPhysicalPath()
+        if len(obj_path) < len(portal_path):
+            # Path to Zope object???
+            return
+        for section in range(len(portal_path)):
+            if portal_path[section] != obj_path[section]:
+                # Object is in a different portal.
+                return
+        return obj
