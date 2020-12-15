@@ -16,8 +16,8 @@ import shutil
 logger = logging.getLogger(__name__)
 
 
-class FullImportView(BrowserView):
-    """Do a full import"""
+class ContentImportView(BrowserView):
+    """Do an import of content"""
 
     def __call__(self):
         return "TODO"

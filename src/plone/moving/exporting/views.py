@@ -16,8 +16,8 @@ import shutil
 logger = logging.getLogger(__name__)
 
 
-class FullExportView(BrowserView):
-    """Export the full site."""
+class ContentExportView(BrowserView):
+    """Export the content of the full site."""
     count = 0
 
     def __call__(self):

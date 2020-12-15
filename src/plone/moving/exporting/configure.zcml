@@ -1,0 +1,15 @@
+<configure
+    xmlns="http://namespaces.zope.org/zope"
+    xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:plone="http://namespaces.plone.org/plone"
+    i18n_domain="plone.moving">
+
+  <!-- We could allow exporting navigation root, Folderish, items, but we start with the full site. -->
+  <browser:page
+      for="Products.CMFPlone.interfaces.IPloneSiteRoot"
+      name="plone-content-export"
+      class=".views.ContentExportView"
+      permission="cmf.ManagePortal"
+      />
+
+</configure>
