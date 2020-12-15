@@ -39,7 +39,7 @@ class ContentExportView(BrowserView):
         # what is the url of the source Plone site.
         # Then we can use that when looking for a path for content urls.
         meta = self.get_central_meta()
-        self._write(config.DIR, "meta", meta)
+        self._write_json(config.DIR, "meta", meta)
         return "Exported {} items".format(self.count)
 
     def export_item(self, item):
@@ -47,8 +47,11 @@ class ContentExportView(BrowserView):
         item_dir = self._make_dir()
         # write meta.json
         meta = self.get_meta(item)
-        self._write(item_dir, "meta", meta)
+        self._write_json(item_dir, "meta", meta)
         for name, serializer in serializers:
+            content = serializer()
+            if not content:
+                continue
             if not name:
                 # Note: all content will have the same "@id":
                 # "http://localhost:8080/Plone/@@plone-export",
@@ -56,10 +59,16 @@ class ContentExportView(BrowserView):
                 # Also skip @components, items, next_item, previous_item.
                 # We might use is_folderish for a check.
                 name = "default"
-            content = serializer()
-            if not content:
-                continue
-            self._write(item_dir, name, content)
+                # self._handle_blobs
+                # Special handling for blobs
+                for key, value in content.items():
+                    if isinstance(value, dict) and "filename" in value:
+                        # TODO this may not work for Archetypes.
+                        field = getattr(item, key)
+                        # blob_path = field._blob.committed()
+                        _filename, ext = os.path.splitext(value["filename"])
+                        self._write_bytes(item_dir, key + ext, field.data)
+            self._write_json(item_dir, name, content)
         self.count += 1
         # Check if item is folderish.
         # Note: item.contentValues can be inherited from parent,
@@ -131,8 +140,14 @@ class ContentExportView(BrowserView):
             os.makedirs(new_dir_name, mode=0o700)
         return new_dir_name
 
-    def _write(self, item_dir, name, content):
+    def _write_json(self, item_dir, name, content):
         filename = os.path.join(item_dir, name + ".json")
         with open(filename, "w") as myfile:
             myfile.write(json.dumps(content))
+        logger.info("Wrote %s", filename)
+
+    def _write_bytes(self, item_dir, name, content):
+        filename = os.path.join(item_dir, name)
+        with open(filename, "wb") as myfile:
+            myfile.write(content)
         logger.info("Wrote %s", filename)
