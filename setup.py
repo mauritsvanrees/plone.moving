@@ -53,6 +53,7 @@ setup(
         'plone.api>=1.8.4',
         'plone.restapi',
         'plone.app.dexterity',
+        'six',
     ],
     extras_require={
         'test': [
