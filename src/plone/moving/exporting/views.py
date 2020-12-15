@@ -3,6 +3,7 @@ from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
 from plone.restapi.interfaces import ISerializeToJson
 from zope.component import getAdapters
+from zope.component import getMultiAdapter
 from zope.component import queryUtility
 from zope.intid.interfaces import IIntIds
 from zope.intid.interfaces import IntIdMissingError
@@ -34,6 +35,11 @@ class ContentExportView(BrowserView):
         # for item in self.context.contentValues():
         #     self.export_item(item)
         self.export_item(self.context)
+        # TODO: we might need to create a central meta.json with info like:
+        # what is the url of the source Plone site.
+        # Then we can use that when looking for a path for content urls.
+        meta = self.get_central_meta()
+        self._write(config.DIR, "meta", meta)
         return "Exported {} items".format(self.count)
 
     def export_item(self, item):
@@ -97,6 +103,25 @@ class ContentExportView(BrowserView):
                 # We could call self.intids.register instead,
                 # but that is a write, so plone.protect would ask for confirmation.
                 pass
+        return info
+
+    def get_central_meta(self):
+        # Gather info for central meta.json.
+        if self.context.portal_type == "Plone Site":
+            portal = self.context
+        else:
+            # We could use plone.api, but if we ever want this in core,
+            # plone.api should not be used.
+            portal = getMultiAdapter(
+                (self.context, self.request), name="plone_portal_state"
+            ).portal()
+        info = {
+            "source_url": self.context.absolute_url(),
+            "source_path": "/".join(self.context.getPhysicalPath()),
+            "source_portal_url": portal.absolute_url(),
+            "source_portal_path": "/".join(portal.getPhysicalPath()),
+            # Maybe add date.
+        }
         return info
 
     def _make_dir(self):
