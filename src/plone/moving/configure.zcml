@@ -7,12 +7,7 @@
     i18n_domain="plone.moving">
 
   <i18n:registerTranslations directory="locales" />
-
-  <!--
-    Be careful if you use general includeDependencies, it can have side effects!
-    Better import explicit packages or configurations ;)
-  -->
-  <!--<includeDependencies package="." />-->
+  <include package="plone.restapi" />
 
   <include package=".browser" />
   <!-- Include our exporting and importing code, but allow to disable it.
