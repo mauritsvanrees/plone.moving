@@ -2,15 +2,18 @@ from .. import config
 from Products.CMFCore.utils import getToolByName
 from Products.Five import BrowserView
 from plone.restapi.interfaces import IDeserializeFromJson
+from plone.restapi.services.locking.locking import is_locked
 from zope.cachedescriptors.property import Lazy
 from zope.component import getAdapters
 from zope.component import queryUtility
+from zope.interface import alsoProvides
 from zope.intid.interfaces import IIntIds
 from zope.intid.interfaces import IntIdMissingError
 
 import json
 import logging
 import os
+import plone.protect.interfaces
 import shutil
 import six
 
@@ -24,6 +27,11 @@ class ContentImportView(BrowserView):
 
     def __call__(self):
         self.count = 0
+        # Disable CSRF protection to avoid the confirmation dialog.
+        # TODO: use POST request from form with protection.
+        if "IDisableCSRFProtection" in dir(plone.protect.interfaces):
+            alsoProvides(self.request, plone.protect.interfaces.IDisableCSRFProtection)
+
         self.catalog = getToolByName(self.context, "portal_catalog")
         # Note: if the dir does not exist or is no dir, os.walk gives an empty list.
         for dirpath, dirnames, filenames in os.walk(config.DIR):
@@ -59,10 +67,6 @@ class ContentImportView(BrowserView):
                 content = json.loads(myfile.read())
             all_info[key] = content
 
-        # Hey, what should the context be?
-        # First determine what the parent should be?
-        # deserializers = getAdapters((item, self.request), IDeserializeFromJson)
-
         # Get meta info.  We might also get some of this from default.json.
         # Maybe we need less in meta.
         meta = all_info["meta"]
@@ -72,12 +76,39 @@ class ContentImportView(BrowserView):
         # See if the object already exists.
         obj = self.get_object(**meta)
         if obj is None:
+            # We need to get the parent.
             logger.info("Not adding content for now.")
             return
         else:
-            # TODO: check if object is locked.
-            # We could throw an error then, but we should probably just unlock.
-            logger.info("Updating existing content at %s", "/".join(obj.getPhysicalPath()))
+            obj_path = "/".join(obj.getPhysicalPath())
+            if is_locked(obj, self.request):
+                # TODO: We could throw an error, but we should probably just unlock.
+                logger.warning("Content is locked: %s", obj_path)
+            logger.info("Updating existing content at %s", obj_path)
+            deserializers = getAdapters((obj, self.request), IDeserializeFromJson)
+            if not deserializers:
+                logger.error("Cannot deserialize type %s", obj.portal_type)
+                return
+            for name, deserializer in deserializers:
+                if not name:
+                    name = "default"
+                # XXX This traceback info overrides the previous.
+                # When done in a separate method, it should be fine.
+                # __traceback_info__ = name
+                __traceback_info__ = dirpath, name
+                content = all_info[name]
+                if name == "local_roles":
+                    # TODO Fix this in plone.restapi.
+                    logger.info("Ignoring local_roles deserializer for now, as it does not accept a content parameter.")
+                    continue
+                # if obj.getId() == "front-page":
+                #     import pdb; pdb.set_trace()
+                try:
+                    deserializer(data=content)
+                except TypeError:
+                    # Happens for site root.  But I want to fix it there too, if that is acceptable.
+                    logger.info("TypeError, likely because deserializer does not accept data keyword argument: %s", deserializer)
+            # TODO: maybe try / except DeserializationError
 
         # Report back that we made an import.
         return True
@@ -93,9 +124,14 @@ class ContentImportView(BrowserView):
                 return brain[0].getObject()
             # We can debate whether we should try by path when the uid is not found.
             # If not, we should return here.
+            # Maybe quit or complain when uid and path are both given and they do not match,
+            # because I foresee problems.
         path = kwargs.get("path")
         if not path:
             return
+        # TODO: importing /Plone/front-page to /Plone2/front-page should work.
+        # Ouch: when I try this with two Plone Sites in the same database,
+        # it finds the item in the original Plone site...
         if path.startswith("/"):
             if six.PY2:
                 path = path.encode("utf8")
