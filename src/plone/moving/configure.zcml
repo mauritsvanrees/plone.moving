@@ -3,6 +3,7 @@
     xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
     xmlns:i18n="http://namespaces.zope.org/i18n"
     xmlns:plone="http://namespaces.plone.org/plone"
+    xmlns:zcml="http://namespaces.zope.org/zcml"
     i18n_domain="plone.moving">
 
   <i18n:registerTranslations directory="locales" />
@@ -14,8 +15,16 @@
   <!--<includeDependencies package="." />-->
 
   <include package=".browser" />
-  <include package=".exporting" />
-  <include package=".importing" />
+  <!-- Include our exporting and importing code, but allow to disable it.
+       Probably most useful when you want to disable importing in an old site
+       when this would need newer versions of dependencies.
+       Also, this can very slightly speed up Plone startup time.
+       To disable both, add this in a meta.zcml:
+       <meta:provides feature="disable-exporting" />
+       <meta:provides feature="disable-importing" />
+    -->
+  <include zcml:condition="not-have disable-exporting" package=".exporting" />
+  <include zcml:condition="not-have disable-importing" package=".importing" />
 
   <include file="permissions.zcml" />
 
