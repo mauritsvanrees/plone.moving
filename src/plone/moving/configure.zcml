@@ -33,6 +33,14 @@
       />
 
   <genericsetup:registerProfile
+      name="example"
+      title="plone.moving example content"
+      directory="profiles/example"
+      description="Installs example content from the plone.moving add-on."
+      provides="Products.GenericSetup.interfaces.EXTENSION"
+      />
+
+  <genericsetup:registerProfile
       name="uninstall"
       title="plone.moving (uninstall)"
       directory="profiles/uninstall"
