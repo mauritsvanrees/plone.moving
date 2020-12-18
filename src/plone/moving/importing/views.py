@@ -44,8 +44,10 @@ class ContentImportView(BrowserView):
     source_portal_url = ""
     source_portal_path = ""
 
-    def __call__(self):
+    def __call__(self, directory=None):
         self.count = 0
+        if directory is None:
+            directory = config.DIR
         # Disable CSRF protection to avoid the confirmation dialog.
         # TODO: use POST request from form with protection.
         if "IDisableCSRFProtection" in dir(plone.protect.interfaces):
@@ -53,7 +55,7 @@ class ContentImportView(BrowserView):
         self.read_central_meta_json()
         self.catalog = getToolByName(self.context, "portal_catalog")
         # Note: if the dir does not exist or is no dir, os.walk gives an empty list.
-        for dirpath, dirnames, filenames in os.walk(config.DIR):
+        for dirpath, dirnames, filenames in os.walk(directory):
             if "default.json" in filenames:
                 imported = self.import_item(dirpath, *filenames)
                 if imported:

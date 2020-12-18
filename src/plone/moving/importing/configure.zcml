@@ -1,6 +1,7 @@
 <configure
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
     xmlns:plone="http://namespaces.plone.org/plone"
     i18n_domain="plone.moving">
 
@@ -9,6 +10,15 @@
       name="plone-content-import"
       class=".views.ContentImportView"
       permission="cmf.ManagePortal"
+      />
+
+  <!-- 'content' as already taken as import step name.
+       Also, we may do much, much more than content. -->
+  <genericsetup:importStep
+      name="plone.moving"
+      title="Import content and maybe other settings via restapi"
+      description="Read directory plone.moving and use json deserializers"
+      handler=".genericsetup.import_step"
       />
 
 </configure>
