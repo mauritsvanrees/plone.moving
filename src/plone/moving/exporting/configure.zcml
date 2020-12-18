@@ -1,6 +1,7 @@
 <configure
     xmlns="http://namespaces.zope.org/zope"
     xmlns:browser="http://namespaces.zope.org/browser"
+    xmlns:genericsetup="http://namespaces.zope.org/genericsetup"
     xmlns:plone="http://namespaces.plone.org/plone"
     i18n_domain="plone.moving">
 
@@ -10,6 +11,15 @@
       name="plone-content-export"
       class=".views.ContentExportView"
       permission="cmf.ManagePortal"
+      />
+
+  <!-- 'content' as already taken as export step name.
+       Also, we may do much, much more than content. -->
+  <genericsetup:exportStep
+      name="plone.moving"
+      title="Export content and maybe other settings via restapi"
+      description="Write directory plone.moving and use json serializers"
+      handler=".genericsetup.export_step"
       />
 
 </configure>

@@ -20,12 +20,18 @@ logger = logging.getLogger(__name__)
 class ContentExportView(BrowserView):
     """Export the content of the full site."""
     count = 0
+    directory = config.DIR
 
-    def __call__(self):
+    def __call__(self, directory=None, delete=True):
         self.count = 0
-        # For the moment, always create a fresh export.
-        # Later we can think about updating.
-        shutil.rmtree(config.DIR)
+        if directory is None:
+            self.directory = config.DIR
+        else:
+            self.directory = directory
+        if delete:
+            # For the moment, always create a fresh export.
+            # Later we can think about updating.
+            shutil.rmtree(self.directory)
         self.intids = queryUtility(IIntIds)
         # Note: if we would allow calling this on non-site root,
         # we should export the current item as well.
@@ -39,11 +45,12 @@ class ContentExportView(BrowserView):
         # what is the url of the source Plone site.
         # Then we can use that when looking for a path for content urls.
         meta = self.get_central_meta()
-        self._write_json(config.DIR, "meta", meta)
+        self._write_json(self.directory, "meta", meta)
         return "Exported {} items".format(self.count)
 
     def export_item(self, item):
         serializers = getAdapters((item, self.request), ISerializeToJson)
+        # XXX Do not call this when making a GS export, as it does not work.
         item_dir = self._make_dir()
         # write meta.json
         meta = self.get_meta(item)
@@ -134,13 +141,15 @@ class ContentExportView(BrowserView):
         return info
 
     def _make_dir(self):
-        # create config.DIR/0/0, config.DIR/0/999, config.DIR/1/1000, etc.
-        new_dir_name = os.path.join(config.DIR, str(self.count // config.ITEMS_PER_DIR), str(self.count))
+        # create dir/0/0, dir/0/999, dir/1/1000, etc.
+        new_dir_name = os.path.join(self.directory, str(self.count // config.ITEMS_PER_DIR), str(self.count))
         if not os.path.isdir(new_dir_name):
             os.makedirs(new_dir_name, mode=0o700)
         return new_dir_name
 
     def _write_json(self, item_dir, name, content):
+        # TODO When using GS export step, we should be calling
+        # setup_context.writeDataFile instead.
         filename = os.path.join(item_dir, name + ".json")
         with open(filename, "w") as myfile:
             myfile.write(json.dumps(content))
